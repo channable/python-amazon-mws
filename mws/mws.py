@@ -9,7 +9,6 @@
 from __future__ import absolute_import
 import six
 
-
 try:  # Python 3.x
     from urllib.parse import quote
 except:  # Python 2.x
@@ -71,6 +70,7 @@ class MWSError(Exception):
 
 def calc_md5(string):
     """Calculates the MD5 encryption for the given string
+    :param string
     """
     md = hashlib.md5()
     md.update(string)
@@ -82,6 +82,7 @@ def remove_empty(d):
     """
         Helper function that removes all keys from a dictionary (d),
         that have an empty value.
+        :param d
     """
     # done for Python 3.x support. old version: for key in d.keys()
     for key in list(d.keys()):
@@ -495,6 +496,9 @@ class Products(MWS):
             relevancy, based on a search query that you specify.
             Your search query can be a phrase that describes the product
             or it can be a product identifier such as a UPC, EAN, ISBN, or JAN.
+            :param marketplaceid
+            :param query
+            :param contextid
         """
         data = dict(Action='ListMatchingProducts',
                     MarketplaceId=marketplaceid,
@@ -505,26 +509,33 @@ class Products(MWS):
     def get_matching_product(self, marketplaceid, asins):
         """ Returns a list of products and their attributes, based on a list of
             ASIN values that you specify.
+            :param marketplaceid
+            :param asins
         """
         data = dict(Action='GetMatchingProduct', MarketplaceId=marketplaceid)
         data.update(self.enumerate_param('ASINList.ASIN.', asins))
         return self.make_request(data)
 
-    def get_matching_product_for_id(self, marketplaceid, type, ids):
+    def get_matching_product_for_id(self, marketplaceid, _type, ids):
         """ Returns a list of products and their attributes, based on a list of
             product identifier values (ASIN, SellerSKU, UPC, EAN, ISBN, GCID  and JAN)
             The identifier type is case sensitive.
             Added in Fourth Release, API version 2011-10-01
+            :param marketplaceid
+            :param _type
+            :param ids
         """
         data = dict(Action='GetMatchingProductForId',
                     MarketplaceId=marketplaceid,
-                    IdType=type)
+                    IdType=_type)
         data.update(self.enumerate_param('IdList.Id.', ids))
         return self.make_request(data)
 
     def get_competitive_pricing_for_sku(self, marketplaceid, skus):
         """ Returns the current competitive pricing of a product,
             based on the SellerSKU and MarketplaceId that you specify.
+            :param marketplaceid
+            :param skus
         """
         data = dict(Action='GetCompetitivePricingForSKU', MarketplaceId=marketplaceid)
         data.update(self.enumerate_param('SellerSKUList.SellerSKU.', skus))
@@ -533,6 +544,8 @@ class Products(MWS):
     def get_competitive_pricing_for_asin(self, marketplaceid, asins):
         """ Returns the current competitive pricing of a product,
             based on the ASIN and MarketplaceId that you specify.
+            :param marketplaceid
+            :param asins
         """
         data = dict(Action='GetCompetitivePricingForASIN', MarketplaceId=marketplaceid)
         data.update(self.enumerate_param('ASINList.ASIN.', asins))
@@ -641,7 +654,11 @@ class Inventory(MWS):
     NS = "{http://mws.amazonaws.com/FulfillmentInventory/2010-10-01}"
 
     def list_inventory_supply(self, skus=(), datetime=None, response_group='Basic'):
-        """ Returns information on available inventory """
+        """ Returns information on available inventory
+            :param skus
+            :param datetime
+            :param response_group
+        """
 
         data = dict(Action='ListInventorySupply',
                     QueryStartDateTime=datetime,
@@ -673,6 +690,7 @@ class Recommendations(MWS):
         """
         Checks whether there are active recommendations for each category for the given marketplace, and if there are,
         returns the time when recommendations were last updated for each category.
+        :param marketplaceid
         """
 
         data = dict(Action='GetLastUpdatedTimeForRecommendations',
@@ -682,6 +700,8 @@ class Recommendations(MWS):
     def list_recommendations(self, marketplaceid, recommendationcategory=None):
         """
         Returns your active recommendations for a specific category or for all categories for a specific marketplace.
+        :param marketplaceid
+        :param recommendationcategory
         """
 
         data = dict(Action="ListRecommendations",
@@ -692,6 +712,7 @@ class Recommendations(MWS):
     def list_recommendations_by_next_token(self, token):
         """
         Returns the next page of recommendations using the NextToken parameter.
+        :param token
         """
 
         data = dict(Action="ListRecommendationsByNextToken",
