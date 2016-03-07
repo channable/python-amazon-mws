@@ -414,16 +414,18 @@ class Reports(MWS):
         data = dict(Action='GetReportRequestListByNextToken', NextToken=token)
         return self.make_request(data)
 
-    def request_report(self, report_type, start_date=None, end_date=None, marketplaceids=()):
+    def request_report(self, report_type, start_date=None, end_date=None, report_options=None, marketplaceids=()):
         data = dict(Action='RequestReport',
                     ReportType=report_type,
                     StartDate=start_date,
-                    EndDate=end_date)
+                    EndDate=end_date,
+                    ReportOptions=report_options)
+        # Added ReportOptions parameter for specific report requests.
+        # ie. with this parameter we can make requests like 'RootNodesOnly = True' or 'BrowseNodeId=...'
         data.update(self.enumerate_param('MarketplaceIdList.Id.', marketplaceids))
         return self.make_request(data)
 
-
-    ### ReportSchedule ###
+    ## ReportSchedule ##
 
     def get_report_schedule_list(self, types=()):
         data = dict(Action='GetReportScheduleList')
