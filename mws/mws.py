@@ -718,3 +718,24 @@ class Recommendations(MWS):
         data = dict(Action="ListRecommendationsByNextToken",
                     NextToken=token)
         return self.make_request(data, "POST")
+
+
+class MerchantFulfillment(MWS):
+
+    """ Amazon MWS Merchant Fulfillment API """
+
+    URI = 'MerchantFulfillment/2015-06-01'
+    VERSION = '2015-06-01'
+    NS = "{https://mws.amazonservices.com/MerchantFulfillment/2015-06-01}"
+
+    def get_eligible_shipping_services(self):
+        return None
+
+    def create_shipment(self):
+        return None
+
+    def get_shipment(self):
+        return None
+
+    def cancel_shipment(self):
+        return None
