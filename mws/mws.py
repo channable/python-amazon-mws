@@ -5,11 +5,20 @@
 # Based on http://code.google.com/p/amazon-mws-python
 #
 
-import urllib
+# Added for python 3.x implementation
+from __future__ import absolute_import
+import six
+
+
+try:  # Python 3.x
+    from urllib.parse import quote
+except:  # Python 2.x
+    from urllib import quote
 import hashlib
 import hmac
 import base64
-import utils
+# importing utils file
+from mws import utils
 import re
 try:
     from xml.etree.ElementTree import ParseError as XMLError
@@ -32,21 +41,22 @@ __all__ = [
     'Sellers',
 ]
 
-# See https://images-na.ssl-images-amazon.com/images/G/01/mwsportal/doc/en_US/bde/MWSDeveloperGuide._V357736853_.pdf page 8
-# for a list of the end points and marketplace IDs
+# See https://images-na.ssl-images-amazon.com/images/G/01/mwsportal/doc/en_US/bde/MWSDeveloperGuide._V357736853_.pdf
+# page 8 for a list of the end points and marketplace IDs
 
+# PEP-8 corrections
 MARKETPLACES = {
-    "CA" : "https://mws.amazonservices.ca", #A2EUQ1WTGCTBG2
-    "US" : "https://mws.amazonservices.com", #ATVPDKIKX0DER",
-    "DE" : "https://mws-eu.amazonservices.com", #A1PA6795UKMFR9
-    "ES" : "https://mws-eu.amazonservices.com", #A1RKKUPIHCS9HS
-    "FR" : "https://mws-eu.amazonservices.com", #A13V1IB3VIYZZH
-    "IN" : "https://mws.amazonservices.in", #A21TJRUUN4KGV
-    "IT" : "https://mws-eu.amazonservices.com", #APJ6JRA9NG5V4
-    "UK" : "https://mws-eu.amazonservices.com", #A1F83G8C2ARO7P
-    "JP" : "https://mws.amazonservices.jp", #A1VC38T7YXB528
-    "CN" : "https://mws.amazonservices.com.cn", #AAHKV2X7AFYLW
-    "MX" : "https://mws.amazonservices.com.mx", #A1AM78C64UM0Y8    
+    "CA": "https://mws.amazonservices.ca",         # A2EUQ1WTGCTBG2
+    "US": "https://mws.amazonservices.com",        # ATVPDKIKX0DER
+    "DE": "https://mws-eu.amazonservices.com",     # A1PA6795UKMFR9
+    "ES": "https://mws-eu.amazonservices.com",     # A1RKKUPIHCS9HS
+    "FR": "https://mws-eu.amazonservices.com",     # A13V1IB3VIYZZH
+    "IN": "https://mws.amazonservices.in",         # A21TJRUUN4KGV
+    "IT": "https://mws-eu.amazonservices.com",     # APJ6JRA9NG5V4
+    "UK": "https://mws-eu.amazonservices.com",     # A1F83G8C2ARO7P
+    "JP": "https://mws.amazonservices.jp",         # A1VC38T7YXB528
+    "CN": "https://mws.amazonservices.com.cn",     # AAHKV2X7AFYLW
+    "MX": "https://mws.amazonservices.com.mx",     # A1AM78C64UM0Y8
 }
 
 
@@ -64,7 +74,8 @@ def calc_md5(string):
     """
     md = hashlib.md5()
     md.update(string)
-    return base64.encodestring(md.digest()).strip('\n')
+    # done for Python 3.x support. old version: return base64.encodestring(md.digest()).strip('\n')
+    return base64.encodestring(md.digest()).strip(b'\n')
 
 
 def remove_empty(d):
@@ -72,7 +83,8 @@ def remove_empty(d):
         Helper function that removes all keys from a dictionary (d),
         that have an empty value.
     """
-    for key in d.keys():
+    # done for Python 3.x support. old version: for key in d.keys()
+    for key in list(d.keys()):
         if not d[key]:
             del d[key]
     return d
@@ -88,8 +100,9 @@ class DictWrapper(object):
         self.original = xml
         self._rootkey = rootkey
         self._mydict = utils.xml2dict().fromstring(remove_namespace(xml))
-        self._response_dict = self._mydict.get(self._mydict.keys()[0],
-                                               self._mydict)
+        # done for Python 3.x support. old version:
+        # self._response_dict = self._mydict.get(self._mydict.keys()[0], self._mydict)
+        self._response_dict = self._mydict.get(list(self._mydict.keys())[0], self._mydict)
 
     @property
     def parsed(self):
@@ -104,9 +117,10 @@ class DataWrapper(object):
         Text wrapper in charge of validating the hash sent by Amazon.
     """
     def __init__(self, data, header):
-        self.original = data
+        # done for Encoding-Decoding error . old version: self.original = data
+        self.original = data.encode('utf-8')
         if 'content-md5' in header:
-            hash_ = calc_md5(self.original)
+            hash_ = calc_md5(self.original).decode('utf-8')
             if header['content-md5'] != hash_:
                 raise MWSError("Wrong Contentlength, maybe amazon error...")
 
@@ -156,13 +170,16 @@ class MWS(object):
             self.domain = MARKETPLACES[region]
         else:
             error_msg = "Incorrect region supplied ('%(region)s'). Must be one of the following: %(marketplaces)s" % {
-                "marketplaces" : ', '.join(MARKETPLACES.keys()),
-                "region" : region,
+                "marketplaces": ', '.join(list(MARKETPLACES.keys())),
+                "region": region,
             }
             raise MWSError(error_msg)
 
     def make_request(self, extra_data, method="GET", **kwargs):
         """Make request to Amazon MWS API with these parameters
+            :param extra_data
+            :param method
+            :param kwargs
         """
 
         # Remove all keys with an empty value because
@@ -180,9 +197,11 @@ class MWS(object):
         if self.auth_token:
             params['MWSAuthToken'] = self.auth_token
         params.update(extra_data)
-        request_description = '&'.join(['%s=%s' % (k, urllib.quote(params[k], safe='-_.~').encode('utf-8')) for k in sorted(params)])
+        # used to it makes TypeError: quote_from_bytes() expected bytes.
+        # old version: quote(params[k], safe='-_.~')
+        request_description = '&'.join(['%s=%s' % (k, quote(str(params[k]), safe='-_.~')) for k in sorted(params)])
         signature = self.calc_signature(method, request_description)
-        url = '%s%s?%s&Signature=%s' % (self.domain, self.uri, request_description, urllib.quote(signature))
+        url = '%s%s?%s&Signature=%s' % (self.domain, self.uri, request_description, quote(signature))
         headers = {'User-Agent': 'python-amazon-mws/0.0.1 (Language=Python)'}
         headers.update(kwargs.get('extra_headers', {}))
 
@@ -196,17 +215,20 @@ class MWS(object):
             # When retrieving data from the response object,
             # be aware that response.content returns the content in bytes while response.text calls
             # response.content and converts it to unicode.
-            data = response.content
+            data = response.text
 
             # I do not check the headers to decide which content structure to server simply because sometimes
             # Amazon's MWS API returns XML error responses with "text/plain" as the Content-Type.
             try:
+                # TODO DictWrapper can't parse the Amazon Browse Tree response.
+                # TODO For that reason parsed_response returns None
                 parsed_response = DictWrapper(data, extra_data.get("Action") + "Result")
             except XMLError:
                 parsed_response = DataWrapper(data, response.headers)
 
-        except HTTPError, e:
-            error = MWSError(str(e.response.text))
+        # done for Python 3.x support. Old version:     except HTTPError, e:
+        except HTTPError as e:
+            error = MWSError(str(e))
             error.response = e.response
             raise error
 
@@ -224,9 +246,13 @@ class MWS(object):
 
     def calc_signature(self, method, request_description):
         """Calculate MWS signature to interface with Amazon
+           :param method
+           :param request_description
         """
-        sig_data = method + '\n' + self.domain.replace('https://', '').lower() + '\n' + self.uri + '\n' + request_description
-        return base64.b64encode(hmac.new(str(self.secret_key), sig_data, hashlib.sha256).digest())
+        sig_data = six.b(method + '\n' + self.domain.replace('https://', '').lower() + '\n' + self.uri + '\n' + request_description)
+        # done for Python 3.x support.
+        key = six.b(self.secret_key)
+        return base64.b64encode(hmac.new(key, sig_data, hashlib.sha256).digest())
 
     def get_timestamp(self):
         """
@@ -238,6 +264,10 @@ class MWS(object):
         """
             Builds a dictionary of an enumerated parameter.
             Takes any iterable and returns a dictionary.
+
+            :param param
+            :param values
+
             ie.
             enumerate_param('MarketplaceIdList.Id', (123, 345, 4343))
             returns
@@ -266,6 +296,11 @@ class Feeds(MWS):
         """
         Uploads a feed ( xml or .tsv ) to the seller's inventory.
         Can be used for creating/updating products on Amazon.
+        :param feed
+        :param feed_type
+        :param marketplaceids
+        :param content_type
+        :param purge
         """
         data = dict(Action='SubmitFeed',
                     FeedType=feed_type,
@@ -276,10 +311,16 @@ class Feeds(MWS):
                                  extra_headers={'Content-MD5': md, 'Content-Type': content_type})
 
     def get_feed_submission_list(self, feedids=None, max_count=None, feedtypes=None,
-                                    processingstatuses=None, fromdate=None, todate=None):
+                                 processingstatuses=None, fromdate=None, todate=None):
         """
         Returns a list of all feed submissions submitted in the previous 90 days.
         That match the query parameters.
+        :param feedids
+        :param max_count
+        :param feedtypes
+        :param processingstatuses
+        :param fromdate
+        :param todate
         """
 
         data = dict(Action='GetFeedSubmissionList',
