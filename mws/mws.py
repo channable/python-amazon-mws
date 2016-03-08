@@ -724,6 +724,8 @@ class MerchantFulfillment(MWS):
 
     """ Amazon MWS Merchant Fulfillment API """
 
+    ACCOUNT_TYPE = "Merchant"
+
     URI = 'MerchantFulfillment/2015-06-01'
     VERSION = '2015-06-01'
     NS = "{https://mws.amazonservices.com/MerchantFulfillment/2015-06-01}"
