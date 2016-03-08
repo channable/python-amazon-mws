@@ -728,14 +728,119 @@ class MerchantFulfillment(MWS):
     VERSION = '2015-06-01'
     NS = "{https://mws.amazonservices.com/MerchantFulfillment/2015-06-01}"
 
-    def get_eligible_shipping_services(self):
-        return None
+    def get_eligible_shipping_services(self, shipment_request_details_dict, order_item_list):
+        """
+        Returns a list of shipping service offers.
+        :param shipment_request_details_dict     must have these elements
+        ( amazon_order_id, length, width, height, height_unit, weight, weight_unit, name, address_line_1, city,
+         postal_code, country_code, email, phone, delivery_experience, carrier_will_pickup, currency_code, amount )
+        :param order_item_list   's components must be a dict { order_item_id , quantity }
+        """
 
-    def create_shipment(self):
-        return None
+        data = dict(Action="GetEligibleShippingService")
 
-    def get_shipment(self):
-        return None
+        # FIXME these all were not best practice but all of these parameters required.
+        # FIXME Maybe, I can find much pythonic way later.
+        data.update({"ShipmentRequestDetails.AmazonOrderId": shipment_request_details_dict['amazon_order_id']})
+        data.update({"ShipmentRequestDetails.PackageDimensions.Length": shipment_request_details_dict['length']})
+        data.update({"ShipmentRequestDetails.PackageDimensions.Width": shipment_request_details_dict['width']})
+        data.update({"ShipmentRequestDetails.PackageDimensions.Height": shipment_request_details_dict['height']})
+        data.update({"ShipmentRequestDetails.PackageDimensions.Unit": shipment_request_details_dict['height_unit']})
+        data.update({"ShipmentRequestDetails.Weight.Value": shipment_request_details_dict['weight']})
+        data.update({"ShipmentRequestDetails.Weight.Unit": shipment_request_details_dict['weight_unit']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.Name": shipment_request_details_dict['name']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.AddressLine1": shipment_request_details_dict['address_line_1']})
+        if 'address_line_2' in shipment_request_details_dict:
+            data.update({"ShipmentRequestDetails.ShipFromAddress.AddressLine1": shipment_request_details_dict['address_line_2']})
+        if 'address_line_3' in shipment_request_details_dict:
+            data.update({"ShipmentRequestDetails.ShipFromAddress.AddressLine1": shipment_request_details_dict['address_line_3']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.City": shipment_request_details_dict['city']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.StateOrProvinceCode": shipment_request_details_dict['state_or_province_code']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.PostalCode": shipment_request_details_dict['postal_code']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.CountryCode": shipment_request_details_dict['country_code']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.Email": shipment_request_details_dict['email']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.Phone": shipment_request_details_dict['phone']})
+        data.update({"ShipmentRequestDetails.ShippingServiceOptions.DeliveryExperience": shipment_request_details_dict['delivery_experience']})
+        data.update({"ShipmentRequestDetails.ShippingServiceOptions.CarrierWillPickUp": shipment_request_details_dict['carrier_will_pickup']})
+        data.update({"ShipmentRequestDetails.ShippingServiceOptions.DeclaredValue.CurrencyCode": shipment_request_details_dict['currency_code']})
+        data.update({"ShipmentRequestDetails.ShippingServiceOptions.DeclaredValue.Amount": shipment_request_details_dict['amount']})
+        counter = 1
+        for order_item_dict in order_item_list:
+            data.update({"ShipmentRequestDetails.ItemList.Item.{}.OrderItemId".format(counter): order_item_dict['order_item_id']})
+            data.update({"ShipmentRequestDetails.ItemList.Item.{}.Quantity".format(counter): order_item_dict['quantity']})
+            counter += 1
 
-    def cancel_shipment(self):
-        return None
+        return self.make_request(data)
+
+    def create_shipment(self, shipping_service_id, shipment_request_details_dict, order_item_list):
+        """
+        Purchases shipping and returns a shipping label.
+
+        The CreateShipment operation purchases shipping and returns PNG or PDF document data for a shipping label.
+        Amazon compresses the document data before returning it as a Base64-encoded string. To obtain the actual PNG or
+        PDF document, decode the Base64-encoded string, save it as a binary file with a “.gzip” extension, and then
+        extract the PNG or PDF file from the GZIP file. Alternatively, you can obtain the label from the decoded data
+        by using the GZIP decompression functionality included in most programming languages. This operation also
+        returns a Base64-encoded MD5 hash to validate the document data.
+        :param shipping_service_id
+        :param shipment_request_details_dict     must have these elements
+        ( amazon_order_id, length, width, height, height_unit, weight, weight_unit, name, address_line_1, city,
+         postal_code, country_code, email, phone, delivery_experience, carrier_will_pickup, currency_code, amount )
+        :param order_item_list   's components must be a dict { order_item_id , quantity }
+        """
+
+        data = dict(Action="CreateShipment",
+                    ShippingServiceId=shipping_service_id)
+
+        # FIXME these all were not best practice but all of these parameters required.
+        # FIXME Maybe, I can find much pythonic way later.
+        data.update({"ShipmentRequestDetails.AmazonOrderId": shipment_request_details_dict['amazon_order_id']})
+        data.update({"ShipmentRequestDetails.PackageDimensions.Length": shipment_request_details_dict['length']})
+        data.update({"ShipmentRequestDetails.PackageDimensions.Width": shipment_request_details_dict['width']})
+        data.update({"ShipmentRequestDetails.PackageDimensions.Height": shipment_request_details_dict['height']})
+        data.update({"ShipmentRequestDetails.PackageDimensions.Unit": shipment_request_details_dict['height_unit']})
+        data.update({"ShipmentRequestDetails.Weight.Value": shipment_request_details_dict['weight']})
+        data.update({"ShipmentRequestDetails.Weight.Unit": shipment_request_details_dict['weight_unit']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.Name": shipment_request_details_dict['name']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.AddressLine1": shipment_request_details_dict['address_line_1']})
+        if 'address_line_2' in shipment_request_details_dict:
+            data.update({"ShipmentRequestDetails.ShipFromAddress.AddressLine1": shipment_request_details_dict['address_line_2']})
+        if 'address_line_3' in shipment_request_details_dict:
+            data.update({"ShipmentRequestDetails.ShipFromAddress.AddressLine1": shipment_request_details_dict['address_line_3']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.City": shipment_request_details_dict['city']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.StateOrProvinceCode": shipment_request_details_dict['state_or_province_code']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.PostalCode": shipment_request_details_dict['postal_code']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.CountryCode": shipment_request_details_dict['country_code']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.Email": shipment_request_details_dict['email']})
+        data.update({"ShipmentRequestDetails.ShipFromAddress.Phone": shipment_request_details_dict['phone']})
+        data.update({"ShipmentRequestDetails.ShippingServiceOptions.DeliveryExperience": shipment_request_details_dict['delivery_experience']})
+        data.update({"ShipmentRequestDetails.ShippingServiceOptions.CarrierWillPickUp": shipment_request_details_dict['carrier_will_pickup']})
+        data.update({"ShipmentRequestDetails.ShippingServiceOptions.DeclaredValue.CurrencyCode": shipment_request_details_dict['currency_code']})
+        data.update({"ShipmentRequestDetails.ShippingServiceOptions.DeclaredValue.Amount": shipment_request_details_dict['amount']})
+        counter = 1
+        for order_item_dict in order_item_list:
+            data.update({"ShipmentRequestDetails.ItemList.Item.{}.OrderItemId".format(counter): order_item_dict['order_item_id']})
+            data.update({"ShipmentRequestDetails.ItemList.Item.{}.Quantity".format(counter): order_item_dict['quantity']})
+            counter += 1
+
+        return self.make_request(data, "POST")
+
+    def get_shipment(self, shipment_id):
+        """
+        Returns an existing shipment for a given identifier.
+        :param shipment_id
+        """
+
+        data = dict(Action="GetShipment",
+                    ShipmentId=shipment_id)
+        return self.make_request(data)
+
+    def cancel_shipment(self, shipment_id):
+        """
+        Cancels an existing shipment.
+        :param shipment_id
+        """
+
+        data = dict(Action="CancelShipment",
+                    ShipmentId=shipment_id)
+        return self.make_request(data, "POST")
