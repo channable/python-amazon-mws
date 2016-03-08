@@ -843,4 +843,4 @@ class MerchantFulfillment(MWS):
 
         data = dict(Action="CancelShipment",
                     ShipmentId=shipment_id)
-        return self.make_request(data, "POST")
+        return self.make_request(data)
