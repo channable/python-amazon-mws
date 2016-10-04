@@ -9,10 +9,9 @@
 from __future__ import absolute_import
 import six
 
-try:  # Python 3.x
-    from urllib.parse import quote
-except:  # Python 2.x
-    from urllib import quote
+from urllib.parse import quote
+import aiohttp
+from aiohttp import HttpProcessingError
 import hashlib
 import hmac
 import base64
@@ -25,7 +24,6 @@ except ImportError:
     from xml.parsers.expat import ExpatError as XMLError
 from time import strftime, gmtime
 
-from requests import request
 from requests.exceptions import HTTPError
 
 
@@ -176,7 +174,7 @@ class MWS(object):
             }
             raise MWSError(error_msg)
 
-    def make_request(self, extra_data, method="GET", **kwargs):
+    async def make_request(self, extra_data, method="GET", **kwargs):
         """Make request to Amazon MWS API with these parameters
             :param extra_data
             :param method
@@ -211,12 +209,16 @@ class MWS(object):
             # My answer is, here i have to get the url parsed string of params in order to sign it, so
             # if i pass the params dict as params to request, request will repeat that step because it will need
             # to convert the dict to a url parsed string, so why do it twice if i can just pass the full url :).
-            response = request(method, url, data=kwargs.get('body', ''), headers=headers)
-            response.raise_for_status()
+            response = await aiohttp.request(method, url, data=kwargs.get('body', ''), headers=headers)
+
             # When retrieving data from the response object,
             # be aware that response.content returns the content in bytes while response.text calls
             # response.content and converts it to unicode.
-            data = response.text
+            data = await response.text()
+
+            # Raise for status
+            if 400 <= response.status:
+                raise HttpProcessingError(code=response.status, message=data)
 
             # I do not check the headers to decide which content structure to server simply because sometimes
             # Amazon's MWS API returns XML error responses with "text/plain" as the Content-Type.
@@ -228,22 +230,22 @@ class MWS(object):
                 parsed_response = DataWrapper(data, response.headers)
 
         # done for Python 3.x support. Old version:     except HTTPError, e:
-        except HTTPError as e:
+        except HttpProcessingError as e:
             error = MWSError(str(e))
-            error.response = e.response
+            error.response = e.message
             raise error
 
         # Store the response object in the parsed_response for quick access
         parsed_response.response = response
         return parsed_response
 
-    def get_service_status(self):
+    async def get_service_status(self):
         """
             Returns a GREEN, GREEN_I, YELLOW or RED status.
             Depending on the status/availability of the API its being called from.
         """
 
-        return self.make_request(extra_data=dict(Action='GetServiceStatus'))
+        return await self.make_request(extra_data=dict(Action='GetServiceStatus'))
 
     def calc_signature(self, method, request_description):
         """Calculate MWS signature to interface with Amazon
@@ -292,7 +294,7 @@ class Feeds(MWS):
 
     ACCOUNT_TYPE = "Merchant"
 
-    def submit_feed(self, feed, feed_type, marketplaceids=None,
+    async def submit_feed(self, feed, feed_type, marketplaceids=None,
                     content_type="text/xml", purge='false'):
         """
         Uploads a feed ( xml or .tsv ) to the seller's inventory.
@@ -308,10 +310,10 @@ class Feeds(MWS):
                     PurgeAndReplace=purge)
         data.update(self.enumerate_param('MarketplaceIdList.Id.', marketplaceids))
         md = calc_md5(feed)
-        return self.make_request(data, method="POST", body=feed,
+        return await self.make_request(data, method="POST", body=feed,
                                  extra_headers={'Content-MD5': md, 'Content-Type': content_type})
 
-    def get_feed_submission_list(self, feedids=None, max_count=None, feedtypes=None,
+    async def get_feed_submission_list(self, feedids=None, max_count=None, feedtypes=None,
                                  processingstatuses=None, fromdate=None, todate=None):
         """
         Returns a list of all feed submissions submitted in the previous 90 days.
@@ -331,31 +333,31 @@ class Feeds(MWS):
         data.update(self.enumerate_param('FeedSubmissionIdList.Id', feedids))
         data.update(self.enumerate_param('FeedTypeList.Type.', feedtypes))
         data.update(self.enumerate_param('FeedProcessingStatusList.Status.', processingstatuses))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_submission_list_by_next_token(self, token):
+    async def get_submission_list_by_next_token(self, token):
         data = dict(Action='GetFeedSubmissionListByNextToken', NextToken=token)
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_feed_submission_count(self, feedtypes=None, processingstatuses=None, fromdate=None, todate=None):
+    async def get_feed_submission_count(self, feedtypes=None, processingstatuses=None, fromdate=None, todate=None):
         data = dict(Action='GetFeedSubmissionCount',
                     SubmittedFromDate=fromdate,
                     SubmittedToDate=todate)
         data.update(self.enumerate_param('FeedTypeList.Type.', feedtypes))
         data.update(self.enumerate_param('FeedProcessingStatusList.Status.', processingstatuses))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def cancel_feed_submissions(self, feedids=None, feedtypes=None, fromdate=None, todate=None):
+    async def cancel_feed_submissions(self, feedids=None, feedtypes=None, fromdate=None, todate=None):
         data = dict(Action='CancelFeedSubmissions',
                     SubmittedFromDate=fromdate,
                     SubmittedToDate=todate)
         data.update(self.enumerate_param('FeedSubmissionIdList.Id.', feedids))
         data.update(self.enumerate_param('FeedTypeList.Type.', feedtypes))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_feed_submission_result(self, feedid):
+    async def get_feed_submission_result(self, feedid):
         data = dict(Action='GetFeedSubmissionResult', FeedSubmissionId=feedid)
-        return self.make_request(data)
+        return await self.make_request(data)
 
 
 class Reports(MWS):
@@ -365,19 +367,19 @@ class Reports(MWS):
 
     ## REPORTS ###
 
-    def get_report(self, report_id):
+    async def get_report(self, report_id):
         data = dict(Action='GetReport', ReportId=report_id)
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_report_count(self, report_types=(), acknowledged=None, fromdate=None, todate=None):
+    async def get_report_count(self, report_types=(), acknowledged=None, fromdate=None, todate=None):
         data = dict(Action='GetReportCount',
                     Acknowledged=acknowledged,
                     AvailableFromDate=fromdate,
                     AvailableToDate=todate)
         data.update(self.enumerate_param('ReportTypeList.Type.', report_types))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_report_list(self, requestids=(), max_count=None, types=(), acknowledged=None,
+    async def get_report_list(self, requestids=(), max_count=None, types=(), acknowledged=None,
                         fromdate=None, todate=None):
         data = dict(Action='GetReportList',
                     Acknowledged=acknowledged,
@@ -386,21 +388,21 @@ class Reports(MWS):
                     MaxCount=max_count)
         data.update(self.enumerate_param('ReportRequestIdList.Id.', requestids))
         data.update(self.enumerate_param('ReportTypeList.Type.', types))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_report_list_by_next_token(self, token):
+    async def get_report_list_by_next_token(self, token):
         data = dict(Action='GetReportListByNextToken', NextToken=token)
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_report_request_count(self, report_types=(), processingstatuses=(), fromdate=None, todate=None):
+    async def get_report_request_count(self, report_types=(), processingstatuses=(), fromdate=None, todate=None):
         data = dict(Action='GetReportRequestCount',
                     RequestedFromDate=fromdate,
                     RequestedToDate=todate)
         data.update(self.enumerate_param('ReportTypeList.Type.', report_types))
         data.update(self.enumerate_param('ReportProcessingStatusList.Status.', processingstatuses))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_report_request_list(self, requestids=(), types=(), processingstatuses=(),
+    async def get_report_request_list(self, requestids=(), types=(), processingstatuses=(),
                                 max_count=None, fromdate=None, todate=None):
         data = dict(Action='GetReportRequestList',
                     MaxCount=max_count,
@@ -409,13 +411,13 @@ class Reports(MWS):
         data.update(self.enumerate_param('ReportRequestIdList.Id.', requestids))
         data.update(self.enumerate_param('ReportTypeList.Type.', types))
         data.update(self.enumerate_param('ReportProcessingStatusList.Status.', processingstatuses))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_report_request_list_by_next_token(self, token):
+    async def get_report_request_list_by_next_token(self, token):
         data = dict(Action='GetReportRequestListByNextToken', NextToken=token)
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def request_report(self, report_type, start_date=None, end_date=None, report_options=None, marketplaceids=()):
+    async def request_report(self, report_type, start_date=None, end_date=None, report_options=None, marketplaceids=()):
         data = dict(Action='RequestReport',
                     ReportType=report_type,
                     StartDate=start_date,
@@ -424,19 +426,19 @@ class Reports(MWS):
         # Added ReportOptions parameter for specific report requests.
         # ie. with this parameter we can make requests like 'RootNodesOnly = True' or 'BrowseNodeId=...'
         data.update(self.enumerate_param('MarketplaceIdList.Id.', marketplaceids))
-        return self.make_request(data)
+        return await self.make_request(data)
 
     ## ReportSchedule ##
 
-    def get_report_schedule_list(self, types=()):
+    async def get_report_schedule_list(self, types=()):
         data = dict(Action='GetReportScheduleList')
         data.update(self.enumerate_param('ReportTypeList.Type.', types))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_report_schedule_count(self, types=()):
+    async def get_report_schedule_count(self, types=()):
         data = dict(Action='GetReportScheduleCount')
         data.update(self.enumerate_param('ReportTypeList.Type.', types))
-        return self.make_request(data)
+        return await self.make_request(data)
 
 
 class Orders(MWS):
@@ -447,7 +449,7 @@ class Orders(MWS):
     VERSION = "2013-09-01"
     NS = '{https://mws.amazonservices.com/Orders/2013-09-01}'
 
-    def list_orders(self, marketplaceids, created_after=None, created_before=None, lastupdatedafter=None,
+    async def list_orders(self, marketplaceids, created_after=None, created_before=None, lastupdatedafter=None,
                     lastupdatedbefore=None, orderstatus=(), fulfillment_channels=(),
                     payment_methods=(), buyer_email=None, seller_orderid=None, max_results='100'):
 
@@ -464,24 +466,24 @@ class Orders(MWS):
         data.update(self.enumerate_param('MarketplaceId.Id.', marketplaceids))
         data.update(self.enumerate_param('FulfillmentChannel.Channel.', fulfillment_channels))
         data.update(self.enumerate_param('PaymentMethod.Method.', payment_methods))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def list_orders_by_next_token(self, token):
+    async def list_orders_by_next_token(self, token):
         data = dict(Action='ListOrdersByNextToken', NextToken=token)
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_order(self, amazon_order_ids):
+    async def get_order(self, amazon_order_ids):
         data = dict(Action='GetOrder')
         data.update(self.enumerate_param('AmazonOrderId.Id.', amazon_order_ids))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def list_order_items(self, amazon_order_id):
+    async def list_order_items(self, amazon_order_id):
         data = dict(Action='ListOrderItems', AmazonOrderId=amazon_order_id)
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def list_order_items_by_next_token(self, token):
+    async def list_order_items_by_next_token(self, token):
         data = dict(Action='ListOrderItemsByNextToken', NextToken=token)
-        return self.make_request(data)
+        return await self.make_request(data)
 
 
 class Products(MWS):
@@ -491,7 +493,7 @@ class Products(MWS):
     VERSION = '2011-10-01'
     NS = '{http://mws.amazonservices.com/schema/Products/2011-10-01}'
 
-    def list_matching_products(self, marketplaceid, query, contextid=None):
+    async def list_matching_products(self, marketplaceid, query, contextid=None):
         """ Returns a list of products and their attributes, ordered by
             relevancy, based on a search query that you specify.
             Your search query can be a phrase that describes the product
@@ -504,9 +506,9 @@ class Products(MWS):
                     MarketplaceId=marketplaceid,
                     Query=query,
                     QueryContextId=contextid)
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_matching_product(self, marketplaceid, asins):
+    async def get_matching_product(self, marketplaceid, asins):
         """ Returns a list of products and their attributes, based on a list of
             ASIN values that you specify.
             :param marketplaceid
@@ -514,9 +516,9 @@ class Products(MWS):
         """
         data = dict(Action='GetMatchingProduct', MarketplaceId=marketplaceid)
         data.update(self.enumerate_param('ASINList.ASIN.', asins))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_matching_product_for_id(self, marketplaceid, _type, ids):
+    async def get_matching_product_for_id(self, marketplaceid, _type, ids):
         """ Returns a list of products and their attributes, based on a list of
             product identifier values (ASIN, SellerSKU, UPC, EAN, ISBN, GCID  and JAN)
             The identifier type is case sensitive.
@@ -529,9 +531,9 @@ class Products(MWS):
                     MarketplaceId=marketplaceid,
                     IdType=_type)
         data.update(self.enumerate_param('IdList.Id.', ids))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_competitive_pricing_for_sku(self, marketplaceid, skus):
+    async def get_competitive_pricing_for_sku(self, marketplaceid, skus):
         """ Returns the current competitive pricing of a product,
             based on the SellerSKU and MarketplaceId that you specify.
             :param marketplaceid
@@ -539,9 +541,9 @@ class Products(MWS):
         """
         data = dict(Action='GetCompetitivePricingForSKU', MarketplaceId=marketplaceid)
         data.update(self.enumerate_param('SellerSKUList.SellerSKU.', skus))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_competitive_pricing_for_asin(self, marketplaceid, asins):
+    async def get_competitive_pricing_for_asin(self, marketplaceid, asins):
         """ Returns the current competitive pricing of a product,
             based on the ASIN and MarketplaceId that you specify.
             :param marketplaceid
@@ -549,65 +551,65 @@ class Products(MWS):
         """
         data = dict(Action='GetCompetitivePricingForASIN', MarketplaceId=marketplaceid)
         data.update(self.enumerate_param('ASINList.ASIN.', asins))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_lowest_offer_listings_for_sku(self, marketplaceid, skus, condition="Any", excludeme="False"):
+    async def get_lowest_offer_listings_for_sku(self, marketplaceid, skus, condition="Any", excludeme="False"):
         data = dict(Action='GetLowestOfferListingsForSKU',
                     MarketplaceId=marketplaceid,
                     ItemCondition=condition,
                     ExcludeMe=excludeme)
         data.update(self.enumerate_param('SellerSKUList.SellerSKU.', skus))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_lowest_offer_listings_for_asin(self, marketplaceid, asins, condition="Any", excludeme="False"):
+    async def get_lowest_offer_listings_for_asin(self, marketplaceid, asins, condition="Any", excludeme="False"):
         data = dict(Action='GetLowestOfferListingsForASIN',
                     MarketplaceId=marketplaceid,
                     ItemCondition=condition,
                     ExcludeMe=excludeme)
         data.update(self.enumerate_param('ASINList.ASIN.', asins))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_lowest_priced_offers_for_sku(self, marketplaceid, sku, condition="New", excludeme="False"):
+    async def get_lowest_priced_offers_for_sku(self, marketplaceid, sku, condition="New", excludeme="False"):
         data = dict(Action='GetLowestPricedOffersForSKU',
                     MarketplaceId=marketplaceid,
                     SellerSKU=sku,
                     ItemCondition=condition,
                     ExcludeMe=excludeme)
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_lowest_priced_offers_for_asin(self, marketplaceid, asin, condition="New", excludeme="False"):
+    async def get_lowest_priced_offers_for_asin(self, marketplaceid, asin, condition="New", excludeme="False"):
         data = dict(Action='GetLowestPricedOffersForASIN',
                     MarketplaceId=marketplaceid,
                     ASIN=asin,
                     ItemCondition=condition,
                     ExcludeMe=excludeme)
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_product_categories_for_sku(self, marketplaceid, sku):
+    async def get_product_categories_for_sku(self, marketplaceid, sku):
         data = dict(Action='GetProductCategoriesForSKU',
                     MarketplaceId=marketplaceid,
                     SellerSKU=sku)
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_product_categories_for_asin(self, marketplaceid, asin):
+    async def get_product_categories_for_asin(self, marketplaceid, asin):
         data = dict(Action='GetProductCategoriesForASIN',
                     MarketplaceId=marketplaceid,
                     ASIN=asin)
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_my_price_for_sku(self, marketplaceid, skus, condition=None):
+    async def get_my_price_for_sku(self, marketplaceid, skus, condition=None):
         data = dict(Action='GetMyPriceForSKU',
                     MarketplaceId=marketplaceid,
                     ItemCondition=condition)
         data.update(self.enumerate_param('SellerSKUList.SellerSKU.', skus))
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def get_my_price_for_asin(self, marketplaceid, asins, condition=None):
+    async def get_my_price_for_asin(self, marketplaceid, asins, condition=None):
         data = dict(Action='GetMyPriceForASIN',
                     MarketplaceId=marketplaceid,
                     ItemCondition=condition)
         data.update(self.enumerate_param('ASINList.ASIN.', asins))
-        return self.make_request(data)
+        return await self.make_request(data)
 
 
 class Sellers(MWS):
@@ -617,7 +619,7 @@ class Sellers(MWS):
     VERSION = '2011-07-01'
     NS = '{http://mws.amazonservices.com/schema/Sellers/2011-07-01}'
 
-    def list_marketplace_participations(self):
+    async def list_marketplace_participations(self):
         """
             Returns a list of marketplaces a seller can participate in and
             a list of participations that include seller-specific information in that marketplace.
@@ -625,15 +627,15 @@ class Sellers(MWS):
         """
 
         data = dict(Action='ListMarketplaceParticipations')
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def list_marketplace_participations_by_next_token(self, token):
+    async def list_marketplace_participations_by_next_token(self, token):
         """
             Takes a "NextToken" and returns the same information as "list_marketplace_participations".
             Based on the "NextToken".
         """
         data = dict(Action='ListMarketplaceParticipations', NextToken=token)
-        return self.make_request(data)
+        return await self.make_request(data)
 
 
 #### Fulfillment APIs ####
@@ -653,7 +655,7 @@ class Inventory(MWS):
     VERSION = '2010-10-01'
     NS = "{http://mws.amazonaws.com/FulfillmentInventory/2010-10-01}"
 
-    def list_inventory_supply(self, skus=(), datetime=None, response_group='Basic'):
+    async def list_inventory_supply(self, skus=(), datetime=None, response_group='Basic'):
         """ Returns information on available inventory
             :param skus
             :param datetime
@@ -665,11 +667,11 @@ class Inventory(MWS):
                     ResponseGroup=response_group,
                     )
         data.update(self.enumerate_param('SellerSkus.member.', skus))
-        return self.make_request(data, "POST")
+        return await self.make_request(data, "POST")
 
-    def list_inventory_supply_by_next_token(self, token):
+    async def list_inventory_supply_by_next_token(self, token):
         data = dict(Action='ListInventorySupplyByNextToken', NextToken=token)
-        return self.make_request(data, "POST")
+        return await self.make_request(data, "POST")
 
 
 class OutboundShipments(MWS):
@@ -686,7 +688,7 @@ class Recommendations(MWS):
     VERSION = '2013-04-01'
     NS = "{https://mws.amazonservices.com/Recommendations/2013-04-01}"
 
-    def get_last_updated_time_for_recommendations(self, marketplaceid):
+    async def get_last_updated_time_for_recommendations(self, marketplaceid):
         """
         Checks whether there are active recommendations for each category for the given marketplace, and if there are,
         returns the time when recommendations were last updated for each category.
@@ -695,9 +697,9 @@ class Recommendations(MWS):
 
         data = dict(Action='GetLastUpdatedTimeForRecommendations',
                     MarketplaceId=marketplaceid)
-        return self.make_request(data, "POST")
+        return await self.make_request(data, "POST")
 
-    def list_recommendations(self, marketplaceid, recommendationcategory=None):
+    async def list_recommendations(self, marketplaceid, recommendationcategory=None):
         """
         Returns your active recommendations for a specific category or for all categories for a specific marketplace.
         :param marketplaceid
@@ -707,9 +709,9 @@ class Recommendations(MWS):
         data = dict(Action="ListRecommendations",
                     MarketplaceId=marketplaceid,
                     RecommendationCategory=recommendationcategory)
-        return self.make_request(data, "POST")
+        return await self.make_request(data, "POST")
 
-    def list_recommendations_by_next_token(self, token):
+    async def list_recommendations_by_next_token(self, token):
         """
         Returns the next page of recommendations using the NextToken parameter.
         :param token
@@ -717,7 +719,7 @@ class Recommendations(MWS):
 
         data = dict(Action="ListRecommendationsByNextToken",
                     NextToken=token)
-        return self.make_request(data, "POST")
+        return await self.make_request(data, "POST")
 
 
 class MerchantFulfillment(MWS):
@@ -730,7 +732,7 @@ class MerchantFulfillment(MWS):
     VERSION = '2015-06-01'
     NS = "{https://mws.amazonservices.com/MerchantFulfillment/2015-06-01}"
 
-    def get_eligible_shipping_services(self, shipment_request_details_dict, order_item_list):
+    async def get_eligible_shipping_services(self, shipment_request_details_dict, order_item_list):
         """
         Returns a list of shipping service offers.
         :param shipment_request_details_dict     must have these elements
@@ -772,9 +774,9 @@ class MerchantFulfillment(MWS):
             data.update({"ShipmentRequestDetails.ItemList.Item.{}.Quantity".format(counter): order_item_dict['quantity']})
             counter += 1
 
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def create_shipment(self, shipping_service_id, shipment_request_details_dict, order_item_list):
+    async def create_shipment(self, shipping_service_id, shipment_request_details_dict, order_item_list):
         """
         Purchases shipping and returns a shipping label.
 
@@ -825,9 +827,9 @@ class MerchantFulfillment(MWS):
             data.update({"ShipmentRequestDetails.ItemList.Item.{}.Quantity".format(counter): order_item_dict['quantity']})
             counter += 1
 
-        return self.make_request(data, "POST")
+        return await self.make_request(data, "POST")
 
-    def get_shipment(self, shipment_id):
+    async def get_shipment(self, shipment_id):
         """
         Returns an existing shipment for a given identifier.
         :param shipment_id
@@ -835,9 +837,9 @@ class MerchantFulfillment(MWS):
 
         data = dict(Action="GetShipment",
                     ShipmentId=shipment_id)
-        return self.make_request(data)
+        return await self.make_request(data)
 
-    def cancel_shipment(self, shipment_id):
+    async def cancel_shipment(self, shipment_id):
         """
         Cancels an existing shipment.
         :param shipment_id
@@ -845,4 +847,4 @@ class MerchantFulfillment(MWS):
 
         data = dict(Action="CancelShipment",
                     ShipmentId=shipment_id)
-        return self.make_request(data)
+        return await self.make_request(data)
