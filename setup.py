@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 version = '0.6'
 
-REQUIREMENTS = ['requests']
+REQUIREMENTS = ['xmltodict']
 
 CLASSIFIERS = [
     'Development Status :: 2 - Pre-Alpha',

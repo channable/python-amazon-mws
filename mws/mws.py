@@ -15,8 +15,7 @@ from aiohttp import HttpProcessingError
 import hashlib
 import hmac
 import base64
-# importing utils file
-from mws import utils
+import xmltodict
 import re
 try:
     from xml.etree.ElementTree import ParseError as XMLError
@@ -98,7 +97,7 @@ class DictWrapper(object):
     def __init__(self, xml, rootkey=None):
         self.original = xml
         self._rootkey = rootkey
-        self._mydict = utils.xml2dict().fromstring(remove_namespace(xml))
+        self._mydict = xmltodict.parse(remove_namespace(xml))
         # done for Python 3.x support. old version:
         # self._response_dict = self._mydict.get(self._mydict.keys()[0], self._mydict)
         self._response_dict = self._mydict.get(list(self._mydict.keys())[0], self._mydict)
