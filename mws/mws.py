@@ -227,7 +227,7 @@ class MWS(object):
             # When retrieving data from the response object,
             # be aware that response.content returns the content in bytes while response.text calls
             # response.content and converts it to unicode.
-            data = await response.text()
+            data = await response.text(encoding="utf-8")
 
             # Raise for status
             if 400 <= response.status:
