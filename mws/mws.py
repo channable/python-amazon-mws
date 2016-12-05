@@ -324,7 +324,7 @@ class Feeds(MWS):
         data.update(self.enumerate_param('MarketplaceIdList.Id.', marketplaceids))
         md = calc_md5(feed)
         return await self.make_request(data, method="POST", body=feed,
-                                 extra_headers={'Content-MD5': md, 'Content-Type': content_type})
+                                 extra_headers={'Content-MD5': str(md, 'utf-8'), 'Content-Type': content_type})
 
     async def get_feed_submission_list(self, feedids=None, max_count=None, feedtypes=None,
                                  processingstatuses=None, fromdate=None, todate=None):
