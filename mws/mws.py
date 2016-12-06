@@ -322,7 +322,7 @@ class Feeds(MWS):
                     FeedType=feed_type,
                     PurgeAndReplace=purge)
         data.update(self.enumerate_param('MarketplaceIdList.Id.', marketplaceids))
-        md = calc_md5(feed)
+        md = calc_md5(feed.encode('utf-8'))
         return await self.make_request(data, method="POST", body=feed,
                                  extra_headers={'Content-MD5': str(md, 'utf-8'), 'Content-Type': content_type})
 
