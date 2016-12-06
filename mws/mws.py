@@ -239,6 +239,9 @@ class MWS(object):
                 # TODO DictWrapper can't parse the Amazon Browse Tree response.
                 # TODO For that reason parsed_response returns None
                 parsed_response = DictWrapper(data, extra_data.get("Action") + "Result")
+
+                if parsed_response.parsed == None:
+                    raise MWSError(data)
             except XMLError:
                 parsed_response = DataWrapper(data, response.headers)
 
@@ -322,7 +325,7 @@ class Feeds(MWS):
                     FeedType=feed_type,
                     PurgeAndReplace=purge)
         data.update(self.enumerate_param('MarketplaceIdList.Id.', marketplaceids))
-        md = calc_md5(feed.encode('utf-8'))
+        md = calc_md5(feed)
         return await self.make_request(data, method="POST", body=feed,
                                  extra_headers={'Content-MD5': str(md, 'utf-8'), 'Content-Type': content_type})
 
