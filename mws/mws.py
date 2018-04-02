@@ -11,7 +11,7 @@ import six
 
 from urllib.parse import quote
 import aiohttp
-from aiohttp import HttpProcessingError
+from aiohttp.http_exceptions import HttpProcessingError
 import hashlib
 import hmac
 import base64
