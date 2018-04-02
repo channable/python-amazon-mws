@@ -168,13 +168,14 @@ class MWS(object):
     # Which is the name of the parameter for that specific account type.
     ACCOUNT_TYPE = "SellerId"
 
-    def __init__(self, access_key, secret_key, account_id, region='US', domain='', uri="", version="", auth_token=""):
+    def __init__(self, access_key, secret_key, account_id, region='US', domain='', uri="", version="", auth_token="", client_session=None):
         self.access_key = access_key
         self.secret_key = secret_key
         self.account_id = account_id
         self.auth_token = auth_token
         self.version = version or self.VERSION
         self.uri = uri or self.URI
+        self.client_session = client_session
 
         if domain:
             self.domain = domain
@@ -222,7 +223,7 @@ class MWS(object):
             # My answer is, here i have to get the url parsed string of params in order to sign it, so
             # if i pass the params dict as params to request, request will repeat that step because it will need
             # to convert the dict to a url parsed string, so why do it twice if i can just pass the full url :).
-            response = await aiohttp.request(method, url, data=kwargs.get('body', ''), headers=headers)
+            response = await self.client_session.request(method, url, data=kwargs.get('body', ''), headers=headers)
 
             # When retrieving data from the response object,
             # be aware that response.content returns the content in bytes while response.text calls
